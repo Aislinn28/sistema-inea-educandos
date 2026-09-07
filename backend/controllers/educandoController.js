@@ -155,11 +155,20 @@ async function eliminarDocumento(req, res) {
       return res.status(404).json({ mensaje: "Documento no encontrado" });
     }
 
+    const nombreDocumento = documento.nombre_archivo;
+
     await cloudinary.uploader.destroy(documento.public_id, {
       resource_type: documento.resource_type || "raw",
     });
     documento.deleteOne();
     await educando.save();
+
+    await HistorialAuditoria.create({
+      id_educando: educando._id,
+      id_usuario: req.usuario.id,
+      accion: "eliminar",
+      detalle: `Documento "${nombreDocumento}" eliminado del educando ${educando.nombre}`,
+    });
 
     return res.json({ mensaje: "Documento eliminado correctamente" });
   } catch (error) {

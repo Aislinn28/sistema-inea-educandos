@@ -25,6 +25,10 @@ const usuarioSchema = new mongoose.Schema(
       required: true,
       default: "lectura",
     },
+    activo: {
+      type: Boolean,
+      default: true,
+    },
     intentos_fallidos: {
       type: Number,
       default: 0,

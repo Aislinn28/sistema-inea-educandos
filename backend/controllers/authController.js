@@ -37,10 +37,78 @@ async function crearUsuario(req, res) {
         nombre: nuevoUsuario.nombre,
         correo: nuevoUsuario.correo,
         rol: nuevoUsuario.rol,
+        activo: nuevoUsuario.activo,
       },
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({ mensaje: "Ya existe un usuario con ese correo" });
+    }
     return res.status(500).json({ mensaje: "Error al crear el usuario", error: error.message });
+  }
+}
+
+// Lista todos los usuarios (solo admin). No se envia password_hash ni tokens.
+async function listarUsuarios(req, res) {
+  try {
+    const usuarios = await Usuario.find()
+      .select("nombre correo rol activo createdAt")
+      .sort({ createdAt: -1 });
+    return res.json(usuarios);
+  } catch (error) {
+    return res.status(500).json({ mensaje: "Error al obtener los usuarios", error: error.message });
+  }
+}
+
+// Edita nombre, correo o rol de un usuario existente (solo admin)
+async function editarUsuario(req, res) {
+  try {
+    const { id } = req.params;
+    const { nombre, correo, rol } = req.body;
+
+    const usuario = await Usuario.findByIdAndUpdate(
+      id,
+      { nombre, correo, rol },
+      { new: true, runValidators: true }
+    ).select("nombre correo rol activo");
+
+    if (!usuario) {
+      return res.status(404).json({ mensaje: "Usuario no encontrado" });
+    }
+
+    return res.json({ mensaje: "Usuario actualizado correctamente", usuario });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({ mensaje: "Ya existe un usuario con ese correo" });
+    }
+    return res.status(500).json({ mensaje: "Error al actualizar el usuario", error: error.message });
+  }
+}
+
+// Baja logica: el usuario deja de poder iniciar sesion pero no se borra (requisito de auditoria)
+async function cambiarEstatusUsuario(req, res) {
+  try {
+    const { id } = req.params;
+    const { activo } = req.body;
+
+    if (String(id) === String(req.usuario.id) && activo === false) {
+      return res.status(400).json({ mensaje: "No puedes dar de baja tu propia cuenta" });
+    }
+
+    const usuario = await Usuario.findByIdAndUpdate(id, { activo: !!activo }, { new: true }).select(
+      "nombre correo rol activo"
+    );
+
+    if (!usuario) {
+      return res.status(404).json({ mensaje: "Usuario no encontrado" });
+    }
+
+    return res.json({
+      mensaje: usuario.activo ? "Usuario reactivado correctamente" : "Usuario dado de baja correctamente",
+      usuario,
+    });
+  } catch (error) {
+    return res.status(500).json({ mensaje: "Error al actualizar el estatus del usuario", error: error.message });
   }
 }
 
@@ -55,6 +123,10 @@ async function login(req, res) {
     const usuario = await Usuario.findOne({ correo });
     if (!usuario) {
       return res.status(401).json({ mensaje: "Credenciales invalidas" });
+    }
+
+    if (usuario.activo === false) {
+      return res.status(403).json({ mensaje: "Esta cuenta esta dada de baja. Contacta al administrador" });
     }
 
     // Revisa si el usuario esta bloqueado por intentos fallidos (requisito 15)
@@ -148,7 +220,7 @@ async function restablecerPassword(req, res) {
     const { password } = req.body;
 
     if (!password || password.length < 8) {
-      return res.status(400).json({ mensaje: "La contrasena debe tener al menos 8 caracteres" });
+      return res.status(400).json({ mensaje: "La contraseña debe tener al menos 8 caracteres" });
     }
 
     const tokenHasheado = crypto.createHash("sha256").update(token).digest("hex");
@@ -169,10 +241,18 @@ async function restablecerPassword(req, res) {
     usuario.bloqueado_hasta = null;
     await usuario.save();
 
-    return res.json({ mensaje: "Contrasena actualizada correctamente, ya puedes iniciar sesion" });
+    return res.json({ mensaje: "Contraseña actualizada correctamente, ya puedes iniciar sesion" });
   } catch (error) {
-    return res.status(500).json({ mensaje: "Error al restablecer la contrasena", error: error.message });
+    return res.status(500).json({ mensaje: "Error al restablecer la contraseña", error: error.message });
   }
 }
 
-module.exports = { crearUsuario, login, solicitarRecuperacion, restablecerPassword };
+module.exports = {
+  crearUsuario,
+  listarUsuarios,
+  editarUsuario,
+  cambiarEstatusUsuario,
+  login,
+  solicitarRecuperacion,
+  restablecerPassword,
+};

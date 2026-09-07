@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: "Inter", sans-serif;
+  background-color: #fafaf7;
+  color: #33393f;
+}
+
+h1, h2, h3 {
+  font-family: "Source Serif 4", serif;
+}
+
+/* Tablas tipo "expediente": bordes definidos, sin sombras difusas */
+.tabla-expediente {
+  border: 1px solid #d8d4c8;
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.tabla-expediente th,
+.tabla-expediente td {
+  border-bottom: 1px solid #e4e1d6;
+  padding: 0.65rem 0.85rem;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.tabla-expediente th {
+  background-color: #f0eee5;
+  font-weight: 600;
+  color: #1e3a5f;
+}

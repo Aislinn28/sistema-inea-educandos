@@ -5,10 +5,12 @@ const cloudinary = require("../config/cloudinary");
 // Crea un educando y registra la accion en el historial (requisito 8)
 async function crearEducando(req, res) {
   try {
-    const { nombre, rfe, fecha_registro, nivel } = req.body;
+    const { apellido_paterno, apellido_materno, nombres, rfe, fecha_registro, nivel } = req.body;
 
     const nuevoEducando = await Educando.create({
-      nombre,
+      apellido_paterno,
+      apellido_materno,
+      nombres,
       rfe,
       fecha_registro,
       nivel,
@@ -40,7 +42,7 @@ async function listarEducandos(req, res) {
     if (rfe) filtro.rfe = new RegExp(rfe, "i");
     if (nivel) filtro.nivel = nivel;
 
-    const educandos = await Educando.find(filtro).sort({ fecha_registro: -1 });
+    const educandos = await Educando.find(filtro).sort({ nombre: 1 });
     return res.json(educandos);
   } catch (error) {
     return res.status(500).json({ mensaje: "Error al obtener los educandos", error: error.message });

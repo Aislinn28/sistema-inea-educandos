@@ -33,17 +33,46 @@ async function crearEducando(req, res) {
   }
 }
 
-// Lista educandos activos, con busqueda por RFE y filtro por nivel (requisitos 4 y 5)
+// Letra de la "hoja" a la que pertenece un educando (inicial del apellido paterno, sin acento).
+function letraInicial(apellido) {
+  const c = (apellido || "").trim().charAt(0).toUpperCase();
+  if (c === "Ñ") return "Ñ";
+  const base = c.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return /^[A-Z]$/.test(base) ? base : "#";
+}
+
+// Lista TODOS los educandos (activos y bajas) en orden alfabético, con búsqueda por RFE
+// y filtro por nivel.
+// Cada letra es una "hoja": "numero" es la posición consecutiva entre los ACTIVOS de esa letra
+// (reinicia en 1 en cada letra). Las bajas se quedan en su lugar, sin número, y los activos
+// siguientes se recorren. El número se calcula ANTES de filtrar, así no cambia al buscar.
 async function listarEducandos(req, res) {
   try {
     const { rfe, nivel } = req.query;
-    const filtro = { estatus: "activo" };
 
-    if (rfe) filtro.rfe = new RegExp(rfe, "i");
-    if (nivel) filtro.nivel = nivel;
+    const todos = await Educando.find()
+      .sort({ apellido_paterno: 1, apellido_materno: 1, nombres: 1, _id: 1 })
+      .collation({ locale: "es", strength: 1 }) // ignora acentos/mayúsculas y respeta la Ñ
+      .lean();
 
-    const educandos = await Educando.find(filtro).sort({ nombre: 1 });
-    return res.json(educandos);
+    const contadores = {};
+    let lista = todos.map((e) => {
+      const letra = letraInicial(e.apellido_paterno);
+      let numero = null;
+      if (e.estatus === "activo") {
+        contadores[letra] = (contadores[letra] || 0) + 1;
+        numero = contadores[letra];
+      }
+      return { ...e, letra, numero };
+    });
+
+    if (rfe) {
+      const patron = new RegExp(rfe, "i");
+      lista = lista.filter((e) => patron.test(e.rfe));
+    }
+    if (nivel) lista = lista.filter((e) => e.nivel === nivel);
+
+    return res.json(lista);
   } catch (error) {
     return res.status(500).json({ mensaje: "Error al obtener los educandos", error: error.message });
   }
@@ -178,11 +207,36 @@ async function eliminarDocumento(req, res) {
   }
 }
 
+// Reactiva a un educando dado de baja: vuelve a su lugar alfabético y recupera su número
+async function reactivarEducando(req, res) {
+  try {
+    const { id } = req.params;
+
+    const educando = await Educando.findByIdAndUpdate(id, { estatus: "activo" }, { new: true });
+
+    if (!educando) {
+      return res.status(404).json({ mensaje: "Educando no encontrado" });
+    }
+
+    await HistorialAuditoria.create({
+      id_educando: educando._id,
+      id_usuario: req.usuario.id,
+      accion: "editar",
+      detalle: `Educando ${educando.nombre} (RFE: ${educando.rfe}) reactivado`,
+    });
+
+    return res.json({ mensaje: "Educando reactivado correctamente" });
+  } catch (error) {
+    return res.status(500).json({ mensaje: "Error al reactivar el educando", error: error.message });
+  }
+}
+
 module.exports = {
   crearEducando,
   listarEducandos,
   editarEducando,
   eliminarEducando,
+  reactivarEducando,
   subirDocumentos,
   eliminarDocumento,
 };

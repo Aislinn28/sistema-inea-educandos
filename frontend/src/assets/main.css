@@ -2,33 +2,95 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: "Inter", sans-serif;
-  background-color: #fafaf7;
-  color: #33393f;
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    @apply bg-surface font-sans text-ink;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-semibold tracking-tight text-ink;
+  }
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary/40 ring-offset-1;
+  }
 }
 
-h1, h2, h3 {
-  font-family: "Source Serif 4", serif;
-}
+@layer components {
+  /* Contenedores */
+  .card {
+    @apply rounded-xl border border-line bg-white shadow-card;
+  }
 
-/* Tablas tipo "expediente": bordes definidos, sin sombras difusas */
-.tabla-expediente {
-  border: 1px solid #d8d4c8;
-  border-collapse: collapse;
-  width: 100%;
-}
+  /* Botones */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-primary text-white hover:bg-primary-dark;
+  }
+  .btn-secondary {
+    @apply btn border border-line bg-white text-ink-soft hover:bg-surface;
+  }
+  .btn-ghost {
+    @apply btn text-ink-muted hover:bg-surface hover:text-ink;
+  }
+  .icon-btn {
+    @apply inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-surface hover:text-ink;
+  }
+  .icon-btn-danger {
+    @apply hover:bg-danger-50 hover:text-danger;
+  }
 
-.tabla-expediente th,
-.tabla-expediente td {
-  border-bottom: 1px solid #e4e1d6;
-  padding: 0.65rem 0.85rem;
-  text-align: left;
-  font-size: 0.9rem;
-}
+  /* Formularios */
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-ink-soft;
+  }
+  .input {
+    @apply w-full rounded-lg border border-line bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-muted/70 transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20;
+  }
 
-.tabla-expediente th {
-  background-color: #f0eee5;
-  font-weight: 600;
-  color: #1e3a5f;
+  select.input {
+    @apply appearance-none bg-[length:16px] bg-[right_0.75rem_center] bg-no-repeat pr-10;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235F6C64' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  }
+
+  /* Etiquetas de estado */
+  .badge {
+    @apply inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium;
+  }
+  .badge-inicial {
+    @apply badge bg-nivel-inicial-bg text-nivel-inicial;
+  }
+  .badge-intermedio {
+    @apply badge bg-nivel-intermedio-bg text-nivel-intermedio;
+  }
+  .badge-avanzado {
+    @apply badge bg-nivel-avanzado-bg text-nivel-avanzado;
+  }
+
+  /* Tablas */
+  .tabla {
+    @apply w-full text-left text-sm;
+  }
+  .tabla thead th {
+    @apply whitespace-nowrap bg-surface px-5 py-3 text-xs font-semibold text-ink-muted;
+  }
+  .tabla tbody td {
+    @apply border-t border-line px-5 py-3.5 align-middle text-ink-soft;
+  }
+  .tabla tbody tr:hover td {
+    @apply bg-surface/60;
+  }
+
+  /* Avisos */
+  .aviso-ok {
+    @apply flex items-start gap-2 rounded-lg border border-primary/20 bg-primary-50 px-3.5 py-2.5 text-sm text-primary-dark;
+  }
+  .aviso-error {
+    @apply flex items-start gap-2 rounded-lg border border-danger/20 bg-danger-50 px-3.5 py-2.5 text-sm text-danger;
+  }
 }

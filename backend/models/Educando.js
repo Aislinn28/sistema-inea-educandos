@@ -47,7 +47,7 @@ const educandoSchema = new mongoose.Schema(
     },
     nivel: {
       type: String,
-      enum: ["Inicial", "Primaria", "Secundaria"], // ajusta a los niveles reales del INEA
+      enum: ["Alfabetización", "Primaria", "Secundaria"], // ajusta a los niveles reales del INEA
       required: [true, "El nivel es obligatorio"],
     },
     estatus: {

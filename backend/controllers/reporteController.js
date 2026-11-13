@@ -1,6 +1,14 @@
 const ExcelJS = require("exceljs");
-const PDFDocument = require("pdfkit");
-const Educando = require("../models/Educando");
+const {
+  crearDocumento,
+  dibujarTitulo,
+  agregarNumerosDePagina,
+  MARGEN,
+  ANCHO_CONTENIDO,
+  LIMITE_Y,
+  COLOR_GUINDA,
+} = require("../utils/plantillaPdf");
+const { obtenerEducandosNumerados } = require("../utils/educandosNumerados");
 const { obtenerPorNivel, obtenerPorMes } = require("./dashboardController");
 const {
   construirUrlGraficaPorNivel,
@@ -8,31 +16,60 @@ const {
   descargarImagenGrafica,
 } = require("../utils/graficas");
 
-// Exporta la lista de educandos activos a un archivo .xlsx (requisito 6)
+// true  = las bajas aparecen en su lugar con la etiqueta BAJA (igual que en el sistema)
+// false = solo se exportan los educandos activos
+const INCLUIR_BAJAS = true;
+
+async function obtenerParaExportar() {
+  const todos = await obtenerEducandosNumerados();
+  return INCLUIR_BAJAS ? todos : todos.filter((e) => e.estatus === "activo");
+}
+
+// Exporta los educandos a un .xlsx con una hoja por letra (A, B, C...), como en el sistema
 async function exportarExcel(req, res) {
   try {
-    const educandos = await Educando.find({ estatus: "activo" }).sort({ fecha_registro: -1 });
+    const educandos = await obtenerParaExportar();
 
     const workbook = new ExcelJS.Workbook();
-    const hoja = workbook.addWorksheet("Educandos");
 
-    hoja.columns = [
-      { header: "Nombre", key: "nombre", width: 30 },
-      { header: "RFE", key: "rfe", width: 20 },
-      { header: "Fecha de registro", key: "fecha_registro", width: 18 },
-      { header: "Nivel", key: "nivel", width: 15 },
-    ];
+    // Solo se crean las hojas de las letras que tienen educandos
+    const letras = [...new Set(educandos.map((e) => e.letra))];
 
-    hoja.getRow(1).font = { bold: true };
+    letras.forEach((letra) => {
+      const hoja = workbook.addWorksheet(letra);
 
-    educandos.forEach((e) => {
-      hoja.addRow({
-        nombre: e.nombre,
-        rfe: e.rfe,
-        fecha_registro: e.fecha_registro.toLocaleDateString("es-MX"),
-        nivel: e.nivel,
-      });
+      hoja.columns = [
+        { header: "No.", key: "numero", width: 8 },
+        { header: "Nombre", key: "nombre", width: 34 },
+        { header: "RFE", key: "rfe", width: 20 },
+        { header: "Fecha de registro", key: "fecha_registro", width: 18 },
+        { header: "Nivel", key: "nivel", width: 15 },
+      ];
+
+      // Encabezado en verde, fijo al hacer scroll y con filtros
+      const encabezado = hoja.getRow(1);
+      encabezado.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      encabezado.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1B5E2F" } };
+      hoja.views = [{ state: "frozen", ySplit: 1 }];
+      hoja.autoFilter = { from: "A1", to: "E1" };
+
+      educandos
+        .filter((e) => e.letra === letra)
+        .forEach((e) => {
+          const fila = hoja.addRow({
+            numero: e.estatus === "activo" ? e.numero : "BAJA",
+            nombre: e.nombre,
+            rfe: e.rfe,
+            fecha_registro: new Date(e.fecha_registro).toLocaleDateString("es-MX"),
+            nivel: e.nivel,
+          });
+          fila.getCell("numero").alignment = { horizontal: "center" };
+          if (e.estatus !== "activo") fila.font = { italic: true, color: { argb: "FFB42318" } };
+        });
     });
+
+    // Un libro sin hojas no se puede abrir: si no hay educandos, se deja una hoja vacia
+    if (letras.length === 0) workbook.addWorksheet("Educandos");
 
     res.setHeader(
       "Content-Type",
@@ -47,72 +84,101 @@ async function exportarExcel(req, res) {
   }
 }
 
-// Exporta la lista de educandos activos a un PDF en forma de tabla (requisito 6)
+// Exporta los educandos a un PDF con la plantilla institucional, en orden alfabetico y agrupado por letra
 async function exportarPdf(req, res) {
   try {
-    const educandos = await Educando.find({ estatus: "activo" }).sort({ fecha_registro: -1 });
+    const educandos = await obtenerParaExportar();
 
-    const doc = new PDFDocument({ margin: 40, size: "A4" });
+    const doc = crearDocumento();
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", "attachment; filename=educandos.pdf");
     doc.pipe(res);
 
-    doc.fontSize(16).text("Reporte de Educandos - INEA", { align: "center" });
-    doc.moveDown();
+    let y = dibujarTitulo(
+      doc,
+      "Reporte de Educandos",
+      `Orden alfabético por apellido paterno - Generado el ${new Date().toLocaleString("es-MX")}`
+    );
 
-    const margenIzquierdo = doc.page.margins.left;
+    // Las columnas suman el ancho util de la plantilla (441.9 pt)
     const columnas = [
-      { titulo: "Nombre", ancho: 180 },
-      { titulo: "RFE", ancho: 100 },
-      { titulo: "Fecha registro", ancho: 100 },
-      { titulo: "Nivel", ancho: 100 },
+      { titulo: "No.", ancho: 36 },
+      { titulo: "Nombre", ancho: 168 },
+      { titulo: "RFE", ancho: 98 },
+      { titulo: "Fecha registro", ancho: 70 },
+      { titulo: "Nivel", ancho: 70 },
     ];
+    const anchoTabla = columnas.reduce((suma, c) => suma + c.ancho, 0);
+    const x0 = MARGEN.izquierdo;
 
-    // Dibuja una fila completa en coordenadas fijas, sin depender de doc.x/doc.y
-    // (asi evitamos que el cursor interno se desalinee entre columnas)
-    function dibujarFila(valores, y, negrita = false) {
-      let x = margenIzquierdo;
-      doc.font(negrita ? "Helvetica-Bold" : "Helvetica").fontSize(10);
+    // Dibuja una fila en coordenadas fijas y devuelve su alto (el nombre puede ocupar 2 lineas)
+    function dibujarFila(valores, y, { negrita = false, color = "#000000", italica = false } = {}) {
+      const fuente = negrita ? "Helvetica-Bold" : italica ? "Helvetica-Oblique" : "Helvetica";
+      doc.font(fuente).fontSize(9).fillColor(color);
+      const alto = Math.max(
+        ...valores.map((v, i) => doc.heightOfString(String(v), { width: columnas[i].ancho - 6 }))
+      );
+      let x = x0;
       valores.forEach((valor, i) => {
-        doc.text(String(valor), x, y, { width: columnas[i].ancho });
+        doc.text(String(valor), x, y, { width: columnas[i].ancho - 6 });
         x += columnas[i].ancho;
       });
+      doc.fillColor("#000000");
+      return alto;
     }
 
-    let y = doc.y;
-    dibujarFila(
-      columnas.map((c) => c.titulo),
-      y,
-      true
-    );
-    y += 20;
+    function dibujarEncabezadoTabla(y) {
+      dibujarFila(columnas.map((c) => c.titulo), y, { negrita: true });
+      doc.moveTo(x0, y + 14).lineTo(x0 + anchoTabla, y + 14).strokeColor("#CCCCCC").stroke();
+      return y + 20;
+    }
+
+    function nuevaPagina() {
+      doc.addPage(); // la plantilla se dibuja sola
+      return dibujarEncabezadoTabla(MARGEN.superior);
+    }
+
+    y = dibujarEncabezadoTabla(y);
+    let letraActual = null;
 
     educandos.forEach((educando) => {
-      if (y > 750) {
-        doc.addPage();
-        y = 40;
+      // Barra guinda con la letra al empezar cada grupo (con espacio para al menos una fila)
+      if (educando.letra !== letraActual) {
+        if (y + 50 > LIMITE_Y) y = nuevaPagina();
+        doc.rect(x0, y - 2, anchoTabla, 17).fill(COLOR_GUINDA);
+        doc.font("Helvetica-Bold").fontSize(9).fillColor("#FFFFFF").text(`Letra ${educando.letra}`, x0 + 6, y + 2);
+        doc.fillColor("#000000");
+        y += 23;
+        letraActual = educando.letra;
       }
 
-      dibujarFila(
-        [
-          educando.nombre,
-          educando.rfe,
-          educando.fecha_registro.toLocaleDateString("es-MX"),
-          educando.nivel,
-        ],
-        y
-      );
-      y += 20;
+      const baja = educando.estatus !== "activo";
+      const valores = [
+        baja ? "BAJA" : educando.numero,
+        educando.nombre,
+        educando.rfe,
+        new Date(educando.fecha_registro).toLocaleDateString("es-MX"),
+        educando.nivel,
+      ];
+
+      // Si la fila no cabe en lo que queda de la pagina, pasa a la siguiente
+      doc.font("Helvetica").fontSize(9);
+      const altoEstimado = doc.heightOfString(String(educando.nombre), { width: columnas[1].ancho - 6 });
+      if (y + altoEstimado > LIMITE_Y - 6) y = nuevaPagina();
+
+      const alto = dibujarFila(valores, y, baja ? { color: "#B42318", italica: true } : {});
+      y += alto + 8;
     });
 
+    agregarNumerosDePagina(doc);
     doc.end();
   } catch (error) {
     return res.status(500).json({ mensaje: "Error al exportar a PDF", error: error.message });
   }
 }
 
-// Exporta un PDF con las graficas del dashboard (requisito 7)
+// Exporta un PDF con las graficas del dashboard, con la plantilla institucional
 async function exportarGraficasPdf(req, res) {
   try {
     const [porNivel, porMes] = await Promise.all([obtenerPorNivel(), obtenerPorMes()]);
@@ -127,22 +193,25 @@ async function exportarGraficasPdf(req, res) {
       descargarImagenGrafica(urlMes),
     ]);
 
-    const doc = new PDFDocument({ margin: 40, size: "A4" });
+    const doc = crearDocumento();
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", "attachment; filename=dashboard_educandos.pdf");
     doc.pipe(res);
 
-    doc.fontSize(16).text("Dashboard de Educandos - INEA", { align: "center" });
-    doc.moveDown();
-    doc.fontSize(10).text(`Generado el ${new Date().toLocaleString("es-MX")}`, { align: "center" });
-    doc.moveDown(2);
+    let y = dibujarTitulo(
+      doc,
+      "Dashboard de Educandos",
+      `Generado el ${new Date().toLocaleString("es-MX")}`
+    );
 
-    doc.image(imagenNivel, { fit: [500, 300], align: "center" });
-    doc.moveDown();
-    doc.addPage();
-    doc.image(imagenMes, { fit: [500, 300], align: "center" });
+    // Las dos graficas caben en una sola pagina, centradas en el ancho util de la plantilla
+    const ALTO_GRAFICA = 235;
+    doc.image(imagenNivel, MARGEN.izquierdo, y, { fit: [ANCHO_CONTENIDO, ALTO_GRAFICA], align: "center" });
+    y += ALTO_GRAFICA + 14;
+    doc.image(imagenMes, MARGEN.izquierdo, y, { fit: [ANCHO_CONTENIDO, ALTO_GRAFICA], align: "center" });
 
+    agregarNumerosDePagina(doc);
     doc.end();
   } catch (error) {
     return res.status(500).json({ mensaje: "Error al exportar las graficas a PDF", error: error.message });

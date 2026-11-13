@@ -5,6 +5,7 @@ const {
   crearEducando,
   listarEducandos,
   editarEducando,
+  reactivarEducando,
   eliminarEducando,
   subirDocumentos,
   eliminarDocumento,
@@ -23,6 +24,7 @@ router.get("/", listarEducandos);
 router.post("/", checkRole("admin", "capturista"), crearEducando);
 router.put("/:id", checkRole("admin", "capturista"), editarEducando);
 router.delete("/:id", checkRole("admin", "capturista"), eliminarEducando);
+router.put("/:id/reactivar", checkRole("admin", "capturista"), reactivarEducando);
 
 // Subir documentos: campo "documentos" en form-data, puede ser multiple
 router.post(

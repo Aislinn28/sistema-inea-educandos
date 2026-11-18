@@ -1,21 +1,8 @@
-const path = require("path");
-const nodemailer = require("nodemailer");
 
-// Transportador de correo. Funciona con Gmail (usando una "contraseña de aplicación")
-// o con cualquier otro proveedor SMTP (Outlook, SendGrid, etc.)
-//
-// IMPORTANTE: el correo siempre sale desde la cuenta EMAIL_USER del archivo .env.
-// Para que salga desde la cuenta del administrador / de la institución, basta con
-// poner ahí los datos de ESA cuenta (ver EMAIL_USER y EMAIL_PASS en .env).
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: Number(process.env.EMAIL_PORT) || 587,
-  secure: false, // true solo si usas el puerto 465
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+const path = require("path");
+
+// Brevo utiliza su API HTTPS por el puerto 443.
+// Esto evita los bloqueos de puertos SMTP de Render.
 
 const COLOR_GUINDA = "#671235";
 const MINUTOS_VIGENCIA = 30;
@@ -28,10 +15,10 @@ function escapar(texto) {
     .replace(/"/g, "&quot;");
 }
 
-// Cuerpo del correo de recuperación (HTML con tablas y estilos en línea para que se vea
-// bien en Gmail, Outlook y celulares)
+// Cuerpo HTML del correo de recuperación
 function construirHtmlRecuperacion(enlace) {
   const url = escapar(enlace);
+
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -41,21 +28,24 @@ function construirHtmlRecuperacion(enlace) {
   <title>Recuperación de contraseña</title>
 </head>
 <body style="margin:0;padding:0;background-color:#F3F6F3;">
-  <!-- Texto de vista previa (se ve junto al asunto en la bandeja de entrada) -->
+
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
     Usa este enlace para elegir una nueva contraseña. Es válido por ${MINUTOS_VIGENCIA} minutos.
   </div>
 
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F3F6F3;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+    style="background-color:#F3F6F3;">
     <tr>
       <td align="center" style="padding:24px 12px;">
+
         <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"
           style="width:100%;max-width:600px;background-color:#FFFFFF;border:1px solid #E2E8E3;border-radius:12px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;">
 
           <!-- Banner institucional -->
           <tr>
             <td style="padding:0;line-height:0;font-size:0;">
-              <img src="cid:banner-inea" width="600" alt="Secretaría de Educación Pública · Instituto Nacional para la Educación de los Adultos"
+              <img src="cid:banner-inea" width="600"
+                alt="Secretaría de Educación Pública · Instituto Nacional para la Educación de los Adultos"
                 style="display:block;width:100%;max-width:600px;height:auto;border:0;" />
             </td>
           </tr>
@@ -66,7 +56,11 @@ function construirHtmlRecuperacion(enlace) {
               <h1 style="margin:0 0 16px 0;font-size:22px;line-height:28px;color:#14201A;font-weight:bold;">
                 Recuperación de contraseña
               </h1>
-              <p style="margin:0 0 12px 0;font-size:15px;line-height:23px;color:#3E4C44;">Hola,</p>
+
+              <p style="margin:0 0 12px 0;font-size:15px;line-height:23px;color:#3E4C44;">
+                Hola,
+              </p>
+
               <p style="margin:0 0 24px 0;font-size:15px;line-height:23px;color:#3E4C44;">
                 Recibimos una solicitud para restablecer la contraseña de tu cuenta en
                 <strong>SIGESE-INEA</strong>, el Sistema de Gestión y Seguimiento de Expedientes.
@@ -83,6 +77,7 @@ function construirHtmlRecuperacion(enlace) {
               </a>
             </td>
           </tr>
+
           <tr>
             <td align="center" style="padding:12px 36px 24px 36px;">
               <p style="margin:0;font-size:13px;line-height:19px;color:#5F6C64;">
@@ -91,14 +86,18 @@ function construirHtmlRecuperacion(enlace) {
             </td>
           </tr>
 
-          <!-- Enlace alterno -->
+          <!-- Enlace alternativo -->
           <tr>
             <td style="padding:0 36px 24px 36px;">
               <p style="margin:0 0 6px 0;font-size:13px;line-height:19px;color:#5F6C64;">
                 Si el botón no funciona, copia y pega este enlace en tu navegador:
               </p>
+
               <p style="margin:0;font-size:12px;line-height:18px;color:${COLOR_GUINDA};word-break:break-all;">
-                <a href="${url}" target="_blank" style="color:${COLOR_GUINDA};text-decoration:underline;">${url}</a>
+                <a href="${url}" target="_blank"
+                  style="color:${COLOR_GUINDA};text-decoration:underline;">
+                  ${url}
+                </a>
               </p>
             </td>
           </tr>
@@ -121,18 +120,29 @@ function construirHtmlRecuperacion(enlace) {
           <!-- Pie -->
           <tr>
             <td style="padding:0 36px;">
-              <div style="height:3px;line-height:3px;font-size:0;background-color:${COLOR_GUINDA};">&nbsp;</div>
+              <div style="height:3px;line-height:3px;font-size:0;background-color:${COLOR_GUINDA};">
+                &nbsp;
+              </div>
             </td>
           </tr>
+
           <tr>
             <td style="padding:16px 36px 28px 36px;font-size:12px;line-height:18px;color:#5F6C64;">
-              <strong style="color:#3E4C44;">Instituto Nacional para la Educación de los Adultos</strong><br />
+              <strong style="color:#3E4C44;">
+                Instituto Nacional para la Educación de los Adultos
+              </strong><br />
+
               Calle Purísima Concepción S/N, 1a Cabecera, Municipio de San Felipe del Progreso,
               Estado de México, C.P. 50640<br />
+
               Tel: (712) 1235714 · czsanfelipedelprogreso@inea.gob.mx<br />
-              <span style="color:#8A958E;">Este es un mensaje automático de SIGESE-INEA.</span>
+
+              <span style="color:#8A958E;">
+                Este es un mensaje automático de SIGESE-INEA.
+              </span>
             </td>
           </tr>
+
         </table>
       </td>
     </tr>
@@ -141,7 +151,7 @@ function construirHtmlRecuperacion(enlace) {
 </html>`;
 }
 
-// Versión en texto plano (para clientes de correo que no muestran HTML)
+// Versión en texto plano
 function construirTextoRecuperacion(enlace) {
   return [
     "Recuperación de contraseña - SIGESE-INEA",
@@ -157,23 +167,86 @@ function construirTextoRecuperacion(enlace) {
   ].join("\n");
 }
 
+// Envío de correo mediante la API HTTPS de Brevo
 async function enviarCorreoRecuperacion(destinatario, enlace) {
-  const nombreRemitente = process.env.EMAIL_FROM_NAME || "SIGESE-INEA";
 
-  await transporter.sendMail({
-    from: `"${nombreRemitente}" <${process.env.EMAIL_USER}>`,
-    to: destinatario,
-    subject: "Recuperación de contraseña - SIGESE-INEA",
-    text: construirTextoRecuperacion(enlace),
-    html: construirHtmlRecuperacion(enlace),
-    attachments: [
-      {
-        filename: "encabezado-inea.jpg",
-        path: path.join(__dirname, "..", "assets", "plantilla", "encabezado-correo.jpg"),
-        cid: "banner-inea", // la imagen viaja dentro del correo, no depende de internet
+  // Validar configuración
+  if (!process.env.BREVO_API_KEY) {
+    throw new Error("Falta configurar BREVO_API_KEY.");
+  }
+
+  if (!process.env.EMAIL_FROM) {
+    throw new Error("Falta configurar EMAIL_FROM.");
+  }
+
+  if (!destinatario || !enlace) {
+    throw new Error("El destinatario y el enlace son obligatorios.");
+  }
+
+  const respuesta = await fetch(
+    "https://api.brevo.com/v3/smtp/email",
+    {
+      method: "POST",
+
+      headers: {
+        "api-key": process.env.BREVO_API_KEY,
+        "Content-Type": "application/json",
+        "accept": "application/json",
       },
-    ],
-  });
+
+      body: JSON.stringify({
+        sender: {
+          name: "Sistema INEA - Educandos",
+          email: process.env.EMAIL_FROM,
+        },
+
+        to: [
+          {
+            email: destinatario,
+          },
+        ],
+
+        subject: "Recuperación de contraseña - SIGESE-INEA",
+
+        htmlContent: construirHtmlRecuperacion(enlace),
+
+        textContent: construirTextoRecuperacion(enlace),
+
+        // Imagen institucional integrada al correo
+        attachment: [
+          {
+            name: "encabezado-inea.jpg",
+            content: require("fs")
+              .readFileSync(
+                path.join(
+                  __dirname,
+                  "..",
+                  "assets",
+                  "plantilla",
+                  "encabezado-correo.jpg"
+                )
+              )
+              .toString("base64"),
+          },
+        ],
+      }),
+
+      // Tiempo máximo de espera: 10 segundos
+      signal: AbortSignal.timeout(10000),
+    }
+  );
+
+  if (!respuesta.ok) {
+    const detalle = await respuesta.text();
+
+    throw new Error(
+      `Brevo respondió ${respuesta.status}: ${detalle}`
+    );
+  }
+
+  return await respuesta.json();
 }
 
-module.exports = { enviarCorreoRecuperacion };
+module.exports = {
+  enviarCorreoRecuperacion,
+};

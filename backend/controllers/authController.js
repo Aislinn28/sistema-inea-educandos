@@ -41,15 +41,11 @@ async function crearUsuario(req, res) {
       },
     });
   } catch (error) {
-  console.error("========== ERROR EN RECUPERACIÓN ==========");
-  console.error("Mensaje:", error.message);
-  console.error("Detalle:", error.stack);
-  console.error("============================================");
-
-  return res.status(500).json({
-    mensaje: "Error al procesar la solicitud",
-    error: error.message
-  });
+    if (error.code === 11000) {
+      return res.status(409).json({ mensaje: "Ya existe un usuario con ese correo" });
+    }
+    return res.status(500).json({ mensaje: "Error al crear el usuario", error: error.message });
+  }
 }
 
 // Lista todos los usuarios (solo admin). No se envia password_hash ni tokens.
